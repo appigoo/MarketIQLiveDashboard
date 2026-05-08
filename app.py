@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -1222,96 +1223,140 @@ def main():
 
     # ── AI PROMPT SECTION ──
     ai_prompt = build_ai_prompt(data, score, scores, status_text)
-    # JS: copy to clipboard + open AI tab
-    prompt_js_escaped = ai_prompt.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+    # Safely encode prompt for JS — store in a data attribute, read via JS
+    import json as _json
+    prompt_json = _json.dumps(ai_prompt)   # produces a valid JS string literal
 
-    ai_buttons_html = f"""
-<div class="ai-prompt-wrap">
-  <div class="ai-prompt-label">🤖 一鍵帶數據詢問 AI 分析師</div>
-  <div class="ai-btn-row">
-    <button class="ai-btn ai-btn-claude"   onclick="copyAndOpen('claude',   `{prompt_js_escaped}`)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+    ai_component_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{
+    background: transparent;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 0;
+  }}
+  .wrap {{
+    background: #0a1020;
+    border: 1px solid rgba(0,212,255,0.15);
+    border-radius: 4px;
+    padding: 16px 20px 18px;
+    position: relative;
+    overflow: hidden;
+  }}
+  .wrap::before {{
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(255,215,0,0.4), transparent);
+  }}
+  .label {{
+    font-size: 10px; color: #ffd700;
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 14px;
+  }}
+  .btn-row {{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }}
+  .btn {{
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 20px; border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px; font-weight: 600; letter-spacing: 1px;
+    cursor: pointer; border: 1px solid;
+    transition: all 0.2s; background: transparent;
+  }}
+  .btn:hover {{ transform: translateY(-1px); }}
+  .btn-claude  {{ border-color:rgba(204,120,92,0.5); color:#cc785c; background:rgba(204,120,92,0.08); }}
+  .btn-claude:hover  {{ background:rgba(204,120,92,0.18); box-shadow:0 0 16px rgba(204,120,92,0.25); }}
+  .btn-chatgpt {{ border-color:rgba(16,163,127,0.5);  color:#10a37f; background:rgba(16,163,127,0.08); }}
+  .btn-chatgpt:hover {{ background:rgba(16,163,127,0.18); box-shadow:0 0 16px rgba(16,163,127,0.25); }}
+  .btn-gemini  {{ border-color:rgba(66,133,244,0.5);  color:#4285f4; background:rgba(66,133,244,0.08); }}
+  .btn-gemini:hover  {{ background:rgba(66,133,244,0.18); box-shadow:0 0 16px rgba(66,133,244,0.25); }}
+  .btn-grok    {{ border-color:rgba(255,255,255,0.2);  color:#e8f4f8; background:rgba(255,255,255,0.04); }}
+  .btn-grok:hover    {{ background:rgba(255,255,255,0.10); box-shadow:0 0 16px rgba(255,255,255,0.10); }}
+  .hint {{ font-size:9px; color:#3d5a6e; letter-spacing:0.5px; line-height:1.6; }}
+  .hint span {{ color:#00d4ff; }}
+  .toast {{
+    display:none;
+    margin-top: 12px;
+    padding: 10px 16px;
+    border-radius: 3px;
+    font-size: 11px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: #0d1526;
+    transition: opacity 0.3s;
+  }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="label">🤖 一鍵帶數據詢問 AI 分析師</div>
+  <div class="btn-row">
+    <button class="btn btn-claude"  onclick="go('claude')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><rect x="9" y="8" width="2" height="8" rx="1"/><rect x="13" y="8" width="2" height="8" rx="1"/></svg>
       Claude
     </button>
-    <button class="ai-btn ai-btn-chatgpt"  onclick="copyAndOpen('chatgpt',  `{prompt_js_escaped}`)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M22.2 8.6c.3-.9.3-1.9 0-2.8-.6-1.8-2.1-3.1-3.9-3.5-1-.2-2 0-2.9.4C14.7 1.7 13.4 1 12 1c-1.9 0-3.6 1.1-4.4 2.8-.9.2-1.8.6-2.5 1.3C3.5 6.5 3 8 3.2 9.4c-.7.7-1.1 1.6-1.2 2.6-.2 1.9.8 3.7 2.4 4.7-.3.9-.3 1.9 0 2.8.6 1.8 2.1 3.1 3.9 3.5 1 .2 2 0 2.9-.4.7 1 2 1.7 3.4 1.7 1.9 0 3.6-1.1 4.4-2.8.9-.2 1.8-.6 2.5-1.3 1.6-1.4 2.1-3.5 1.3-5.4.4-.6.7-1.3.8-2.2.2-1.9-.8-3.7-2.4-4.7z"/></svg>
+    <button class="btn btn-chatgpt" onclick="go('chatgpt')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm0 4.5c2 0 6 1 6 3v.5H6V13.5c0-2 4-3 6-3z"/></svg>
       ChatGPT
     </button>
-    <button class="ai-btn ai-btn-gemini"   onclick="copyAndOpen('gemini',   `{prompt_js_escaped}`)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    <button class="btn btn-gemini"  onclick="go('gemini')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="8" x2="22" y2="8"/><line x1="2" y1="16" x2="22" y2="16"/></svg>
       Gemini
     </button>
-    <button class="ai-btn ai-btn-grok"     onclick="copyAndOpen('grok',     `{prompt_js_escaped}`)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+    <button class="btn btn-grok"    onclick="go('grok')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
       Grok
     </button>
   </div>
-  <div class="ai-hint">
-    點擊按鈕 → <span>Prompt 自動複製</span> + 跳轉到 AI 網頁 → 在輸入框按 <span>Ctrl+V</span>（Mac: ⌘+V）貼上即可
-  </div>
+  <div class="hint">點擊按鈕 → <span>Prompt 自動複製到剪貼板</span> → 新分頁開啟 AI 網頁 → 輸入框按 <span>Ctrl+V</span>（Mac: ⌘+V）貼上即可</div>
+  <div class="toast" id="toast"></div>
 </div>
 
 <script>
-const AI_URLS = {{
-  claude:   'https://claude.ai/new',
-  chatgpt:  'https://chatgpt.com/',
-  gemini:   'https://gemini.google.com/app',
-  grok:     'https://grok.com/'
+const PROMPT = {prompt_json};
+const URLS = {{
+  claude:  'https://claude.ai/new',
+  chatgpt: 'https://chatgpt.com/',
+  gemini:  'https://gemini.google.com/app',
+  grok:    'https://grok.com/'
 }};
+const NAMES  = {{claude:'Claude', chatgpt:'ChatGPT', gemini:'Gemini', grok:'Grok'}};
+const COLORS = {{claude:'#cc785c', chatgpt:'#10a37f', gemini:'#4285f4', grok:'#aad4f8'}};
 
-function copyAndOpen(ai, prompt) {{
-  // Copy to clipboard
-  if (navigator.clipboard && navigator.clipboard.writeText) {{
-    navigator.clipboard.writeText(prompt).then(() => {{
-      showToast(ai);
-      setTimeout(() => window.open(AI_URLS[ai], '_blank'), 600);
-    }}).catch(() => {{
-      fallbackCopy(prompt, ai);
-    }});
+function go(ai) {{
+  const toast = document.getElementById('toast');
+  const doOpen = () => {{
+    toast.style.color  = COLORS[ai];
+    toast.style.display = 'block';
+    toast.textContent = '✅ Prompt 已複製！正在跳轉到 ' + NAMES[ai] + '... 請在輸入框按 Ctrl+V';
+    setTimeout(() => {{ toast.style.display = 'none'; }}, 3500);
+    window.open(URLS[ai], '_blank');
+  }};
+
+  if (navigator.clipboard && window.isSecureContext) {{
+    navigator.clipboard.writeText(PROMPT).then(doOpen).catch(() => fallback(doOpen));
   }} else {{
-    fallbackCopy(prompt, ai);
+    fallback(doOpen);
   }}
 }}
 
-function fallbackCopy(text, ai) {{
+function fallback(cb) {{
   const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  ta.value = PROMPT;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
   document.body.appendChild(ta);
   ta.focus(); ta.select();
   try {{ document.execCommand('copy'); }} catch(e) {{}}
   document.body.removeChild(ta);
-  showToast(ai);
-  setTimeout(() => window.open(AI_URLS[ai], '_blank'), 600);
-}}
-
-function showToast(ai) {{
-  const names = {{claude:'Claude',chatgpt:'ChatGPT',gemini:'Gemini',grok:'Grok'}};
-  const colors = {{claude:'#cc785c',chatgpt:'#10a37f',gemini:'#4285f4',grok:'#e8f4f8'}};
-  let toast = document.getElementById('ai-toast');
-  if (!toast) {{
-    toast = document.createElement('div');
-    toast.id = 'ai-toast';
-    toast.style.cssText = `
-      position:fixed; bottom:32px; left:50%; transform:translateX(-50%);
-      padding:12px 24px; border-radius:4px; z-index:9999;
-      font-family:'IBM Plex Mono',monospace; font-size:13px;
-      box-shadow:0 4px 24px rgba(0,0,0,0.5);
-      transition:opacity 0.3s; pointer-events:none;
-      border:1px solid rgba(255,255,255,0.15);
-    `;
-    document.body.appendChild(toast);
-  }}
-  toast.style.background = '#0d1526';
-  toast.style.color = colors[ai] || '#00d4ff';
-  toast.textContent = `✅ Prompt 已複製！正在跳轉到 ${{names[ai]}}...`;
-  toast.style.opacity = '1';
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => {{ toast.style.opacity = '0'; }}, 2800);
+  cb();
 }}
 </script>
-"""
-    st.markdown(ai_buttons_html, unsafe_allow_html=True)
+</body>
+</html>"""
+
+    components.html(ai_component_html, height=130, scrolling=False)
 
     # ── TICKER GROUPS ──
     render_group("📊 大盤指數 ETF",   TICKERS["大盤指數 ETF"],   data, hist, 4)
