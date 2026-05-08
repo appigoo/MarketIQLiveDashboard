@@ -332,6 +332,98 @@ div[data-testid="stMetric"] { background:transparent !important; }
 .js-plotly-plot .plotly { background:transparent !important; }
 
 hr { border-color: var(--border) !important; margin: 8px 0 !important; }
+
+/* ── AI PROMPT BUTTONS ── */
+.ai-prompt-wrap {
+  margin-top: 14px;
+  padding: 16px 22px 18px;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.ai-prompt-wrap::before {
+  content:''; position:absolute; top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,215,0,0.4),transparent);
+}
+.ai-prompt-label {
+  font-family:'IBM Plex Mono',monospace; font-size:10px;
+  color:var(--gold); letter-spacing:2px; text-transform:uppercase;
+  margin-bottom:12px;
+}
+.ai-btn-row {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.ai-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 18px; border-radius: 3px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 1px; cursor: pointer;
+  border: 1px solid; transition: all 0.2s;
+  text-decoration: none; white-space: nowrap;
+}
+.ai-btn:hover { transform: translateY(-1px); }
+
+.ai-btn-claude {
+  background: rgba(204,120,92,0.12);
+  border-color: rgba(204,120,92,0.45);
+  color: #cc785c;
+}
+.ai-btn-claude:hover {
+  background: rgba(204,120,92,0.22);
+  box-shadow: 0 0 16px rgba(204,120,92,0.25);
+}
+.ai-btn-chatgpt {
+  background: rgba(16,163,127,0.12);
+  border-color: rgba(16,163,127,0.45);
+  color: #10a37f;
+}
+.ai-btn-chatgpt:hover {
+  background: rgba(16,163,127,0.22);
+  box-shadow: 0 0 16px rgba(16,163,127,0.25);
+}
+.ai-btn-gemini {
+  background: rgba(66,133,244,0.12);
+  border-color: rgba(66,133,244,0.45);
+  color: #4285f4;
+}
+.ai-btn-gemini:hover {
+  background: rgba(66,133,244,0.22);
+  box-shadow: 0 0 16px rgba(66,133,244,0.25);
+}
+.ai-btn-grok {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.25);
+  color: #e8f4f8;
+}
+.ai-btn-grok:hover {
+  background: rgba(255,255,255,0.12);
+  box-shadow: 0 0 16px rgba(255,255,255,0.12);
+}
+.ai-hint {
+  font-family:'IBM Plex Mono',monospace; font-size:9px;
+  color:var(--text-muted); letter-spacing:0.5px; margin-top:8px;
+}
+.ai-hint span { color: var(--cyan); }
+
+/* prompt preview box */
+.prompt-preview {
+  margin-top: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 12px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  letter-spacing: 0.3px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -716,6 +808,83 @@ def build_tags(data, score):
     if gld and gld["chg"] > 1.2: tags.append(("🔶 黃金避險升溫","sig-orange"))
     return tags
 
+# ── AI PROMPT BUILDER ────────────────────────────────────────────────────────
+def build_ai_prompt(data, score, scores, status_text):
+    d = data
+    def g(t): return d.get(t, {})
+    def fmt(t):
+        dd = g(t)
+        sym = DISPLAY_SYM.get(t, t)
+        if not dd: return f"• {sym}: 數據載入中"
+        p = dd["price"]; c = dd["chg"]
+        sign = "▲" if c > 0 else ("▼" if c < 0 else "▶")
+        return f"• {sym}: ${p:,.2f} ({sign}{abs(c):.2f}%)"
+
+    dim_lines = "\n".join([f"• {k}：{v:.1f}/10" for k,v in scores.items()])
+
+    etf_lines  = "\n".join([fmt(t) for t in TICKERS["大盤指數 ETF"]])
+    fear_lines = "\n".join([fmt(t) for t in TICKERS["恐慌/做空"]])
+    bond_lines = "\n".join([fmt(t) for t in TICKERS["債券/美元/商品"]])
+    sec_lines  = "\n".join([fmt(t) for t in TICKERS["板塊/信用"]])
+    mega_lines = "\n".join([fmt(t) for t in TICKERS["龍頭個股"]])
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    prompt = f"""請作為頂級美股交易分析師，根據以下【即時市場數據】給我一份深度分析報告。
+
+═══════════════════════════════════
+📊 MarketIQ 即時數據 — {now_str}
+市場綜合評分：{score}/100（{status_text}）
+═══════════════════════════════════
+
+【大盤指數 ETF】
+{etf_lines}
+
+【恐慌 / 做空指標】
+{fear_lines}
+
+【債券 / 美元 / 商品】
+{bond_lines}
+
+【板塊 / 信用】
+{sec_lines}
+
+【龍頭個股】
+{mega_lines}
+
+【七維度量化評分】
+{dim_lines}
+
+═══════════════════════════════════
+請根據以上數據，提供：
+
+1️⃣ 【市場結構判斷】
+   當前處於什麼市場格局？牛市/熊市/震盪？關鍵支撐阻力在哪？
+
+2️⃣ 【最大機會】
+   現在最值得關注的做多/做空機會是什麼？具體標的？
+
+3️⃣ 【最大風險】
+   當前最需要警惕的風險訊號是什麼？可能觸發什麼連鎖反應？
+
+4️⃣ 【未來 24-48 小時走勢預判】
+   最可能的走勢路徑？需要關注的關鍵事件？
+
+5️⃣ 【具體操作建議】
+   - 標的：
+   - 方向（做多/做空）：
+   - 建議倉位（%）：
+   - 入場價區間：
+   - 止損位：
+   - 目標位：
+
+6️⃣ 【板塊輪動提示】
+   哪些板塊資金正在流入/流出？如何佈局？
+
+請用繁體中文回答，分析要有深度、有數據支撐、有明確結論。"""
+
+    return prompt
+
 # ── ALERT CHECK ───────────────────────────────────────────────────────────────
 def check_alerts(data, enabled, cooldown_min):
     triggered = []
@@ -1050,6 +1219,99 @@ def main():
   <div class="summary-body">{analysis_html}</div>
   <div class="sig-tags">{tags_html}</div>
 </div>""", unsafe_allow_html=True)
+
+    # ── AI PROMPT SECTION ──
+    ai_prompt = build_ai_prompt(data, score, scores, status_text)
+    # JS: copy to clipboard + open AI tab
+    prompt_js_escaped = ai_prompt.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+
+    ai_buttons_html = f"""
+<div class="ai-prompt-wrap">
+  <div class="ai-prompt-label">🤖 一鍵帶數據詢問 AI 分析師</div>
+  <div class="ai-btn-row">
+    <button class="ai-btn ai-btn-claude"   onclick="copyAndOpen('claude',   `{prompt_js_escaped}`)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+      Claude
+    </button>
+    <button class="ai-btn ai-btn-chatgpt"  onclick="copyAndOpen('chatgpt',  `{prompt_js_escaped}`)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M22.2 8.6c.3-.9.3-1.9 0-2.8-.6-1.8-2.1-3.1-3.9-3.5-1-.2-2 0-2.9.4C14.7 1.7 13.4 1 12 1c-1.9 0-3.6 1.1-4.4 2.8-.9.2-1.8.6-2.5 1.3C3.5 6.5 3 8 3.2 9.4c-.7.7-1.1 1.6-1.2 2.6-.2 1.9.8 3.7 2.4 4.7-.3.9-.3 1.9 0 2.8.6 1.8 2.1 3.1 3.9 3.5 1 .2 2 0 2.9-.4.7 1 2 1.7 3.4 1.7 1.9 0 3.6-1.1 4.4-2.8.9-.2 1.8-.6 2.5-1.3 1.6-1.4 2.1-3.5 1.3-5.4.4-.6.7-1.3.8-2.2.2-1.9-.8-3.7-2.4-4.7z"/></svg>
+      ChatGPT
+    </button>
+    <button class="ai-btn ai-btn-gemini"   onclick="copyAndOpen('gemini',   `{prompt_js_escaped}`)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      Gemini
+    </button>
+    <button class="ai-btn ai-btn-grok"     onclick="copyAndOpen('grok',     `{prompt_js_escaped}`)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      Grok
+    </button>
+  </div>
+  <div class="ai-hint">
+    點擊按鈕 → <span>Prompt 自動複製</span> + 跳轉到 AI 網頁 → 在輸入框按 <span>Ctrl+V</span>（Mac: ⌘+V）貼上即可
+  </div>
+</div>
+
+<script>
+const AI_URLS = {{
+  claude:   'https://claude.ai/new',
+  chatgpt:  'https://chatgpt.com/',
+  gemini:   'https://gemini.google.com/app',
+  grok:     'https://grok.com/'
+}};
+
+function copyAndOpen(ai, prompt) {{
+  // Copy to clipboard
+  if (navigator.clipboard && navigator.clipboard.writeText) {{
+    navigator.clipboard.writeText(prompt).then(() => {{
+      showToast(ai);
+      setTimeout(() => window.open(AI_URLS[ai], '_blank'), 600);
+    }}).catch(() => {{
+      fallbackCopy(prompt, ai);
+    }});
+  }} else {{
+    fallbackCopy(prompt, ai);
+  }}
+}}
+
+function fallbackCopy(text, ai) {{
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try {{ document.execCommand('copy'); }} catch(e) {{}}
+  document.body.removeChild(ta);
+  showToast(ai);
+  setTimeout(() => window.open(AI_URLS[ai], '_blank'), 600);
+}}
+
+function showToast(ai) {{
+  const names = {{claude:'Claude',chatgpt:'ChatGPT',gemini:'Gemini',grok:'Grok'}};
+  const colors = {{claude:'#cc785c',chatgpt:'#10a37f',gemini:'#4285f4',grok:'#e8f4f8'}};
+  let toast = document.getElementById('ai-toast');
+  if (!toast) {{
+    toast = document.createElement('div');
+    toast.id = 'ai-toast';
+    toast.style.cssText = `
+      position:fixed; bottom:32px; left:50%; transform:translateX(-50%);
+      padding:12px 24px; border-radius:4px; z-index:9999;
+      font-family:'IBM Plex Mono',monospace; font-size:13px;
+      box-shadow:0 4px 24px rgba(0,0,0,0.5);
+      transition:opacity 0.3s; pointer-events:none;
+      border:1px solid rgba(255,255,255,0.15);
+    `;
+    document.body.appendChild(toast);
+  }}
+  toast.style.background = '#0d1526';
+  toast.style.color = colors[ai] || '#00d4ff';
+  toast.textContent = `✅ Prompt 已複製！正在跳轉到 ${{names[ai]}}...`;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {{ toast.style.opacity = '0'; }}, 2800);
+}}
+</script>
+"""
+    st.markdown(ai_buttons_html, unsafe_allow_html=True)
 
     # ── TICKER GROUPS ──
     render_group("📊 大盤指數 ETF",   TICKERS["大盤指數 ETF"],   data, hist, 4)
